@@ -8,30 +8,41 @@ jobs:
     runs-on: windows-2022
 
     steps:
+
       # 拉取源码
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # 安装 vcpkg
+
+      # 安装固定版本 vcpkg
       - name: Setup vcpkg
+        shell: cmd
         run: |
           git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-          C:\vcpkg\bootstrap-vcpkg.bat
+          cd C:\vcpkg
+          git checkout 2024.09.30
+          bootstrap-vcpkg.bat
 
-      # 查看 Qt 包名称（调试用）
-      - name: Search Qt packages
-        run: |
-          C:\vcpkg\vcpkg search qt
 
       # 安装依赖
+      # 使用 Qt6 + OpenSSL
       - name: Install dependencies
+        shell: cmd
         run: |
-          C:\vcpkg\vcpkg install qtbase:x64-windows qtconnectivity:x64-windows qtmultimedia:x64-windows qtdeclarative:x64-windows openssl:x64-windows
+          C:\vcpkg\vcpkg install ^
+          qtbase[core,gui,network,widgets,opengl]:x64-windows ^
+          qtconnectivity:x64-windows ^
+          qtmultimedia:x64-windows ^
+          qtdeclarative:x64-windows ^
+          openssl:x64-windows ^
+          --clean-after-build
 
-      # 配置 CMake
+
+      # CMake配置
       - name: Configure CMake
+        shell: cmd
         run: |
           cd windows
           mkdir build
@@ -41,13 +52,16 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
           -DCMAKE_BUILD_TYPE=Release
 
+
       # 编译
       - name: Build
+        shell: cmd
         run: |
           cd windows/build
           cmake --build . --config Release
 
-      # 上传结果
+
+      # 上传exe
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
