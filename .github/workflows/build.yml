@@ -8,33 +8,50 @@ jobs:
     runs-on: windows-2022
 
     steps:
+      # 拉取源码
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Install vcpkg
+      # 安装 vcpkg
+      - name: Setup vcpkg
         run: |
           git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
 
+      # 查看 Qt 包名称（调试用）
+      - name: Search Qt packages
+        run: |
+          C:\vcpkg\vcpkg search qt
+
+      # 安装依赖
       - name: Install dependencies
         run: |
-          C:\vcpkg\vcpkg install qt6-base:x64-windows qt6-connectivity:x64-windows qt6-multimedia:x64-windows qt6-declarative:x64-windows openssl:x64-windows
+          C:\vcpkg\vcpkg install qtbase:x64-windows qtconnectivity:x64-windows qtmultimedia:x64-windows qtdeclarative:x64-windows openssl:x64-windows
 
+      # 配置 CMake
       - name: Configure CMake
         run: |
           cd windows
           mkdir build
           cd build
-          cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
 
+          cmake .. ^
+          -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
+          -DCMAKE_BUILD_TYPE=Release
+
+      # 编译
       - name: Build
         run: |
           cd windows/build
           cmake --build . --config Release
 
-      - name: Upload exe
+      # 上传结果
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: librepods-windows
+          name: librepods-windows-release
           path: |
             windows/build/Release/*.exe
+            windows/build/Release/*.dll
