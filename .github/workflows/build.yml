@@ -1,169 +1,67 @@
 name: Build LibrePods Windows
 
 on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
   build:
-
-    runs-on: windows-2022
-
-    timeout-minutes: 360
+    runs-on: windows-latest
 
     steps:
-
-    - name: Checkout
+    - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        submodules: recursive
 
+    - name: Set up MSVC environment
+      uses: ilammy/msvc-dev-cmd@v1
 
-    # 安装 Qt
     - name: Install Qt
-      shell: cmd
-      run: |
-
-        mkdir C:\Qt
-
-        curl -L -o qt-installer.exe https://download.qt.io/official_releases/online_installers/qt-unified-windows-x64-online.exe
-
-        qt-installer.exe --mirror https://mirrors.tuna.tsinghua.edu.cn/qt ^
-        --accept-licenses ^
-        --confirm-command ^
-        --default-answer ^
-        --root C:\Qt ^
-        install qt.qt6.660.win64_msvc2019_64
-
-
-
-    # 设置Qt环境
-
-    - name: Setup Qt
-
-      shell: cmd
-
-      run: |
-
-        echo C:\Qt\6.6.0\msvc2019_64\bin>>%GITHUB_PATH%
-
-        set QT_ROOT_DIR=C:\Qt\6.6.0\msvc2019_64
-
-
-
-    # 安装vcpkg
-
-    - name: Install vcpkg
-
-      shell: cmd
-
-      run: |
-
-        git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-
-        cd C:\vcpkg
-
-        bootstrap-vcpkg.bat
-
-
-
-    # OpenSSL
-
-    - name: Install OpenSSL
-
-      shell: cmd
-
-      run: |
-
-        C:\vcpkg\vcpkg install openssl:x64-windows
-
-
-
-    # CMake
-
-    - name: Configure
-
-      shell: cmd
-
-      run: |
-
-        cd windows
-
-        mkdir build
-
-        cd build
-
-
-        cmake .. ^
-        -G "Visual Studio 17 2022" ^
-        -A x64 ^
-        -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
-        -DCMAKE_PREFIX_PATH=C:/Qt/6.6.0/msvc2019_64 ^
-        -DOPENSSL_ROOT_DIR=C:/vcpkg/installed/x64-windows
-
-
-
-    # Build
-
-    - name: Build
-
-      shell: cmd
-
-      run: |
-
-        cd windows\build
-
-        cmake --build . --config Release --parallel 4
-
-
-
-    # 自动部署Qt
-
-    - name: Deploy Qt
-
-      shell: cmd
-
-      run: |
-
-        for /r windows\build %%i in (librepods-windows.exe) do (
-
-          cd /d %%~dpi
-
-          C:\Qt\6.6.0\msvc2019_64\bin\windeployqt.exe ^
-          --release ^
-          --compiler-runtime ^
-          --qmldir "%GITHUB_WORKSPACE%\windows" ^
-          librepods-windows.exe
-
-        )
-
-
-
-    # 补OpenSSL
-
-    - name: Copy OpenSSL
-
-      shell: cmd
-
-      run: |
-
-        for /r windows\build %%i in (librepods-windows.exe) do (
-
-          copy C:\vcpkg\installed\x64-windows\bin\libssl-*.dll %%~dpi
-
-          copy C:\vcpkg\installed\x64-windows\bin\libcrypto-*.dll %%~dpi
-
-        )
-
-
-
-    # 打包
-
-    - name: Upload
-
-      uses: actions/upload-artifact@v4
-
+      uses: jurplel/install-qt@v3
       with:
+        version: '6.7.2'
+        target: 'desktop'
+        arch: 'win64_msvc2019_64'
+        modules: 'qtconnectivity qtmultimedia qtdeclarative'
 
-        name: LibrePods-Windows
+    - name: Configure CMake
+      run: |
+        cmake -B windows/build -S windows `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCMAKE_PREFIX_PATH="$env:Qt6_DIR"
 
-        path: windows/build/**
+    - name: Build Project
+      run: |
+        cmake --build windows/build --config Release
+
+    - name: Bundle Qt Dependencies (windeployqt)
+      shell: powershell
+      run: |
+        # 创建打包输出目录
+        New-Item -ItemType Directory -Path "dist" -Force
+
+        # 查找生成的 exe 文件（适配 MSVC 或 Ninja 不同的输出路径）
+        $exe = Get-ChildItem -Path "windows/build" -Filter "librepods-windows.exe" -Recurse | Select-Object -First 1
+        if (-not $exe) {
+          Write-Error "Could not find librepods-windows.exe!"
+          exit 1
+        }
+        
+        # 复制主程序到打包目录
+        Copy-Item $exe.FullName -Destination "dist/librepods-windows.exe"
+
+        # 运行 windeployqt 补充 Qt、QML 和 C++ 运行时依赖 DLL
+        windeployqt --no-compiler-runtime --qmldir windows dist/librepods-windows.exe
+
+    - name: Compress Build Artifact
+      shell: powershell
+      run: |
+        Compress-Archive -Path "dist/*" -DestinationPath "librepods-windows-x64.zip"
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: librepods-windows-x64
+        path: librepods-windows-x64.zip
