@@ -36,29 +36,43 @@ jobs:
       run: |
         cmake --build windows/build --config Release
 
-    - name: Bundle Qt Dependencies (windeployqt)
+    - name: Bundle Qt & OpenSSL Dependencies
       shell: powershell
       run: |
-        # 创建打包输出目录
+        # 1. 创建打包输出目录
         New-Item -ItemType Directory -Path "dist" -Force
 
-        # 查找生成的 exe 文件
+        # 2. 查找并复制主程序
         $exe = Get-ChildItem -Path "windows/build" -Filter "librepods-windows.exe" -Recurse | Select-Object -First 1
         if (-not $exe) {
           Write-Error "Could not find librepods-windows.exe!"
           exit 1
         }
-        
-        # 复制主程序到打包目录
         Copy-Item $exe.FullName -Destination "dist/librepods-windows.exe"
 
-        # 运行 windeployqt 补充 Qt、QML 和依赖 DLL
-        windeployqt --no-compiler-runtime --qmldir windows dist/librepods-windows.exe
+        # 3. 运行 windeployqt 打包 Qt 库（包含 QML 强制补全和编译器运行时）
+        $qtBinDir = Split-Path $env:Qt6_DIR -Parent | Join-Path -ChildPath "bin"
+        $windeployqt = Join-Path $qtBinDir "windeployqt.exe"
+        
+        & $windeployqt --compiler-runtime `
+                       --qmldir windows `
+                       --plugindir "dist/plugins" `
+                       --no-translations `
+                       --verbose 1 `
+                       "dist/librepods-windows.exe"
+
+        # 4. 提取 OpenSSL DLL 放入根目录（Qt 镜像的 bin 目录下自带 OpenSSL）
+        Get-ChildItem -Path $qtBinDir -Filter "libcrypto*.dll" | Copy-Item -Destination "dist"
+        Get-ChildItem -Path $qtBinDir -Filter "libssl*.dll" | Copy-Item -Destination "dist"
+        
+        # 备选：查找系统的 OpenSSL 库（保证万无一失）
+        Get-ChildItem -Path "C:\Program Files" -Filter "libcrypto-*.dll" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 | Copy-Item -Destination "dist"
+        Get-ChildItem -Path "C:\Program Files" -Filter "libssl-*.dll" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 | Copy-Item -Destination "dist"
 
     - name: Compress Build Artifact
       shell: powershell
       run: |
-        Compress-Archive -Path "dist/*" -DestinationPath "librepods-windows-x64.zip"
+        Compress-Archive -Path "dist/*" -DestinationPath "librepods-windows-x64.zip" -Force
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
