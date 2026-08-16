@@ -29,8 +29,7 @@ jobs:
     - name: Configure CMake
       run: |
         cmake -B windows/build -S windows `
-          -DCMAKE_BUILD_TYPE=Release `
-          -DCMAKE_PREFIX_PATH="$env:Qt6_DIR"
+          -DCMAKE_BUILD_TYPE=Release
 
     - name: Build Project
       run: |
@@ -50,24 +49,20 @@ jobs:
         }
         Copy-Item $exe.FullName -Destination "dist/librepods-windows.exe"
 
-        # 3. 运行 windeployqt 打包 Qt 库（包含 QML 强制补全和编译器运行时）
-        $qtBinDir = Split-Path $env:Qt6_DIR -Parent | Join-Path -ChildPath "bin"
-        $windeployqt = Join-Path $qtBinDir "windeployqt.exe"
-        
-        & $windeployqt --compiler-runtime `
-                       --qmldir windows `
-                       --plugindir "dist/plugins" `
-                       --no-translations `
-                       --verbose 1 `
-                       "dist/librepods-windows.exe"
+        # 3. 运行 windeployqt 打包 Qt 库（直接使用环境变量中的 windeployqt）
+        windeployqt --compiler-runtime `
+                    --qmldir windows `
+                    --plugindir "dist/plugins" `
+                    --no-translations `
+                    --verbose 1 `
+                    "dist/librepods-windows.exe"
 
-        # 4. 提取 OpenSSL DLL 放入根目录（Qt 镜像的 bin 目录下自带 OpenSSL）
-        Get-ChildItem -Path $qtBinDir -Filter "libcrypto*.dll" | Copy-Item -Destination "dist"
-        Get-ChildItem -Path $qtBinDir -Filter "libssl*.dll" | Copy-Item -Destination "dist"
-        
-        # 备选：查找系统的 OpenSSL 库（保证万无一失）
-        Get-ChildItem -Path "C:\Program Files" -Filter "libcrypto-*.dll" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 | Copy-Item -Destination "dist"
-        Get-ChildItem -Path "C:\Program Files" -Filter "libssl-*.dll" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 | Copy-Item -Destination "dist"
+        # 4. 自动定位 windeployqt 路径并拷贝 OpenSSL 依赖 (libcrypto*.dll 和 libssl*.dll)
+        $windeployPath = (Get-Command windeployqt).Source
+        $qtBinDir = Split-Path $windeployPath -Parent
+
+        Get-ChildItem -Path $qtBinDir -Filter "libcrypto*.dll" -ErrorAction SilentlyContinue | Copy-Item -Destination "dist"
+        Get-ChildItem -Path $qtBinDir -Filter "libssl*.dll" -ErrorAction SilentlyContinue | Copy-Item -Destination "dist"
 
     - name: Compress Build Artifact
       shell: powershell
