@@ -4,112 +4,217 @@ on:
   workflow_dispatch:
 
 jobs:
+
   build:
+
     runs-on: windows-2022
 
     timeout-minutes: 360
 
+
     steps:
 
-    # 拉取源码
-    - name: Checkout source
+    # 拉源码
+    - name: Checkout
       uses: actions/checkout@v4
       with:
         submodules: recursive
 
 
-    # 安装 Qt6
+
+    # Qt预编译环境
     - name: Install Qt6
+
       uses: jurplel/install-qt-action@v4
+
       with:
-        version: 6.8.3
+
+        version: 6.6.3
+
         host: windows
+
         target: desktop
+
         arch: win64_msvc2022_64
-        modules: qtconnectivity qtmultimedia
+
+        modules: |
+          qtconnectivity
+          qtmultimedia
+
         cache: true
 
 
-    # 安装 vcpkg
-    - name: Install vcpkg
+
+    # vcpkg
+
+    - name: Setup vcpkg
+
       shell: cmd
+
       run: |
+
         git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+
         cd C:\vcpkg
+
         bootstrap-vcpkg.bat
 
 
-    # 安装 OpenSSL
-    - name: Install dependencies
+
+    # OpenSSL
+
+    - name: Install OpenSSL
+
       shell: cmd
+
       run: |
+
         C:\vcpkg\vcpkg install openssl:x64-windows
 
 
-    # 配置 CMake
-    - name: Configure CMake
+
+    # 显示环境
+
+    - name: Check Environment
+
       shell: cmd
+
       run: |
+
+        echo Qt=%QT_ROOT_DIR%
+
+        dir %QT_ROOT_DIR%
+
+        dir C:\vcpkg\installed\x64-windows
+
+
+
+    # CMake配置
+
+    - name: Configure CMake
+
+      shell: cmd
+
+      run: |
+
 
         cd windows
 
+
         mkdir build
+
 
         cd build
 
 
+
         cmake .. ^
-        -DCMAKE_BUILD_TYPE=Release ^
+        -G "Visual Studio 17 2022" ^
+        -A x64 ^
+        -DCMAKE_SYSTEM_VERSION=10.0 ^
         -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
-        -DCMAKE_PREFIX_PATH=%Qt6_DIR%
+        -DCMAKE_PREFIX_PATH="%QT_ROOT_DIR%;%QT_ROOT_DIR%\lib\cmake" ^
+        -DOpenSSL_ROOT_DIR=C:/vcpkg/installed/x64-windows ^
+        -DOPENSSL_INCLUDE_DIR=C:/vcpkg/installed/x64-windows/include ^
+        -DOPENSSL_SSL_LIBRARY=C:/vcpkg/installed/x64-windows/lib/libssl.lib ^
+        -DOPENSSL_CRYPTO_LIBRARY=C:/vcpkg/installed/x64-windows/lib/libcrypto.lib
 
 
 
     # 编译
+
     - name: Build
+
       shell: cmd
+
       run: |
 
         cd windows\build
 
-        cmake --build . --config Release
+        cmake --build . --config Release --parallel 4
 
 
 
-    # Qt自动部署
+    # 查找exe
+
+    - name: Locate exe
+
+      shell: cmd
+
+      run: |
+
+        dir /s librepods-windows.exe
+
+
+
+    # Qt部署
+
     - name: Deploy Qt
+
       shell: cmd
+
       run: |
 
-        cd windows\build\Release
+
+        for /r windows\build %%i in (librepods-windows.exe) do (
+
+          cd /d %%~dpi
 
 
-        "%Qt6_DIR%\bin\windeployqt.exe" ^
-        --release ^
-        --compiler-runtime ^
-        --qmldir ..\.. ^
-        librepods-windows.exe
+          "%QT_ROOT_DIR%\bin\windeployqt.exe" ^
+          --release ^
+          --compiler-runtime ^
+          --qmldir "%GITHUB_WORKSPACE%\windows" ^
+          librepods-windows.exe
+
+        )
 
 
 
-    # 查看输出文件
-    - name: Check build output
+    # 补OpenSSL DLL
+
+    - name: Copy OpenSSL DLL
+
       shell: cmd
+
       run: |
 
-        dir windows\build\Release
 
-        dir windows\build\Release\platforms
+        for /r windows\build %%i in (librepods-windows.exe) do (
+
+          copy C:\vcpkg\installed\x64-windows\bin\libssl-*.dll %%~dpi
+
+          copy C:\vcpkg\installed\x64-windows\bin\libcrypto-*.dll %%~dpi
+
+        )
 
 
 
-    # 上传成品
+    # 最终检查
+
+    - name: Final Check
+
+      shell: cmd
+
+      run: |
+
+
+        dir /s windows\build\*.exe
+
+        dir /s windows\build\*.dll
+
+
+
+    # 上传
+
     - name: Upload Artifact
+
       uses: actions/upload-artifact@v4
+
       with:
 
-        name: LibrePods-Windows
+        name: LibrePods-Windows-Release
 
-        path: |
+        path:
 
-          windows/build/Release/**
+          windows/build/**
