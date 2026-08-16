@@ -24,7 +24,7 @@ jobs:
         version: '6.7.2'
         target: 'desktop'
         arch: 'win64_msvc2019_64'
-        modules: 'qtconnectivity qtmultimedia qtdeclarative'
+        modules: 'qtconnectivity qtmultimedia'
 
     - name: Configure CMake
       run: |
