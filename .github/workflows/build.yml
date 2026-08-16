@@ -31,7 +31,6 @@ jobs:
           qtconnectivity
           qtmultimedia
           qtdeclarative
-          qml
 
 
     # 安装 vcpkg
