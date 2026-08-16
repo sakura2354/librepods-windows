@@ -19,7 +19,7 @@ jobs:
       uses: ilammy/msvc-dev-cmd@v1
 
     - name: Install Qt
-      uses: jurplel/install-qt@v3
+      uses: jurplel/install-qt-action@v4
       with:
         version: '6.7.2'
         target: 'desktop'
@@ -42,7 +42,7 @@ jobs:
         # 创建打包输出目录
         New-Item -ItemType Directory -Path "dist" -Force
 
-        # 查找生成的 exe 文件（适配 MSVC 或 Ninja 不同的输出路径）
+        # 查找生成的 exe 文件
         $exe = Get-ChildItem -Path "windows/build" -Filter "librepods-windows.exe" -Recurse | Select-Object -First 1
         if (-not $exe) {
           Write-Error "Could not find librepods-windows.exe!"
@@ -52,7 +52,7 @@ jobs:
         # 复制主程序到打包目录
         Copy-Item $exe.FullName -Destination "dist/librepods-windows.exe"
 
-        # 运行 windeployqt 补充 Qt、QML 和 C++ 运行时依赖 DLL
+        # 运行 windeployqt 补充 Qt、QML 和依赖 DLL
         windeployqt --no-compiler-runtime --qmldir windows dist/librepods-windows.exe
 
     - name: Compress Build Artifact
