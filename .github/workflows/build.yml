@@ -3,110 +3,45 @@ name: Build LibrePods Windows
 on:
   workflow_dispatch:
 
-
 jobs:
-
   build:
-
     runs-on: windows-2022
-
     timeout-minutes: 360
 
-
     steps:
-
-
-    - name: Checkout source
+    - name: Checkout
       uses: actions/checkout@v4
       with:
         submodules: recursive
 
-
-
-    # 安装 Qt
-    - name: Install Qt6
-
+    - name: Install Qt
       uses: jurplel/install-qt-action@v4
-
       with:
-
         version: 6.6.3
-
         host: windows
-
         target: desktop
-
-        arch: win64_msvc2022_64
-
+        arch: win64_msvc2019_64
         modules: qtconnectivity qtmultimedia
-
         cache: true
 
-
-
-    # 安装 vcpkg
-
     - name: Install vcpkg
-
       shell: cmd
-
       run: |
-
         git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-
         cd C:\vcpkg
-
         bootstrap-vcpkg.bat
 
-
-
-    # 安装 OpenSSL
-
     - name: Install OpenSSL
-
       shell: cmd
-
       run: |
-
         C:\vcpkg\vcpkg install openssl:x64-windows
 
-
-
-    # 检查环境
-
-    - name: Check environment
-
-      shell: cmd
-
-      run: |
-
-        echo QT_ROOT_DIR=%QT_ROOT_DIR%
-
-        dir "%QT_ROOT_DIR%"
-
-        dir C:\vcpkg\installed\x64-windows
-
-
-
-    # CMake配置
-
     - name: Configure CMake
-
       shell: cmd
-
       run: |
-
-
         cd windows
-
-
         mkdir build
-
-
         cd build
-
-
-
         cmake .. ^
         -G "Visual Studio 17 2022" ^
         -A x64 ^
@@ -115,103 +50,45 @@ jobs:
         -DCMAKE_PREFIX_PATH="%QT_ROOT_DIR%" ^
         -DOPENSSL_ROOT_DIR=C:/vcpkg/installed/x64-windows
 
-
-
-    # 编译
-
     - name: Build
-
       shell: cmd
-
       run: |
-
-
         cd windows\build
-
-
         cmake --build . --config Release --parallel 4
 
-
-
-    # 找exe
-
-    - name: Find executable
-
+    - name: Find exe
       shell: cmd
-
       run: |
-
         dir /s librepods-windows.exe
 
-
-
-    # 部署Qt
-
     - name: Deploy Qt
-
       shell: cmd
-
       run: |
-
-
         for /r windows\build %%i in (librepods-windows.exe) do (
-
           cd /d %%~dpi
-
-
           "%QT_ROOT_DIR%\bin\windeployqt.exe" ^
           --release ^
           --compiler-runtime ^
           --qmldir "%GITHUB_WORKSPACE%\windows" ^
           librepods-windows.exe
-
         )
-
-
-
-    # 复制OpenSSL DLL
 
     - name: Copy OpenSSL DLL
-
       shell: cmd
-
       run: |
-
-
         for /r windows\build %%i in (librepods-windows.exe) do (
-
           copy C:\vcpkg\installed\x64-windows\bin\libssl-*.dll %%~dpi
-
           copy C:\vcpkg\installed\x64-windows\bin\libcrypto-*.dll %%~dpi
-
         )
 
-
-
-    # 最终检查
-
-    - name: Check output
-
+    - name: Verify
       shell: cmd
-
       run: |
-
         dir /s windows\build\*.exe
-
         dir /s windows\build\*.dll
 
-
-
-    # 上传
-
-    - name: Upload artifact
-
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
-
       with:
-
         name: LibrePods-Windows
-
-        path: |
-
-          windows/build/**
+        path: windows/build/**
