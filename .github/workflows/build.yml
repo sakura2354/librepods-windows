@@ -3,6 +3,7 @@ name: Build LibrePods Windows
 on:
   workflow_dispatch:
 
+
 jobs:
 
   build:
@@ -14,15 +15,15 @@ jobs:
 
     steps:
 
-    # 拉源码
-    - name: Checkout
+
+    - name: Checkout source
       uses: actions/checkout@v4
       with:
         submodules: recursive
 
 
 
-    # Qt预编译环境
+    # 安装 Qt
     - name: Install Qt6
 
       uses: jurplel/install-qt-action@v4
@@ -37,17 +38,15 @@ jobs:
 
         arch: win64_msvc2022_64
 
-        modules: |
-          qtconnectivity
-          qtmultimedia
+        modules: qtconnectivity qtmultimedia
 
         cache: true
 
 
 
-    # vcpkg
+    # 安装 vcpkg
 
-    - name: Setup vcpkg
+    - name: Install vcpkg
 
       shell: cmd
 
@@ -61,7 +60,7 @@ jobs:
 
 
 
-    # OpenSSL
+    # 安装 OpenSSL
 
     - name: Install OpenSSL
 
@@ -73,17 +72,17 @@ jobs:
 
 
 
-    # 显示环境
+    # 检查环境
 
-    - name: Check Environment
+    - name: Check environment
 
       shell: cmd
 
       run: |
 
-        echo Qt=%QT_ROOT_DIR%
+        echo QT_ROOT_DIR=%QT_ROOT_DIR%
 
-        dir %QT_ROOT_DIR%
+        dir "%QT_ROOT_DIR%"
 
         dir C:\vcpkg\installed\x64-windows
 
@@ -113,11 +112,8 @@ jobs:
         -A x64 ^
         -DCMAKE_SYSTEM_VERSION=10.0 ^
         -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
-        -DCMAKE_PREFIX_PATH="%QT_ROOT_DIR%;%QT_ROOT_DIR%\lib\cmake" ^
-        -DOpenSSL_ROOT_DIR=C:/vcpkg/installed/x64-windows ^
-        -DOPENSSL_INCLUDE_DIR=C:/vcpkg/installed/x64-windows/include ^
-        -DOPENSSL_SSL_LIBRARY=C:/vcpkg/installed/x64-windows/lib/libssl.lib ^
-        -DOPENSSL_CRYPTO_LIBRARY=C:/vcpkg/installed/x64-windows/lib/libcrypto.lib
+        -DCMAKE_PREFIX_PATH="%QT_ROOT_DIR%" ^
+        -DOPENSSL_ROOT_DIR=C:/vcpkg/installed/x64-windows
 
 
 
@@ -129,15 +125,17 @@ jobs:
 
       run: |
 
+
         cd windows\build
+
 
         cmake --build . --config Release --parallel 4
 
 
 
-    # 查找exe
+    # 找exe
 
-    - name: Locate exe
+    - name: Find executable
 
       shell: cmd
 
@@ -147,7 +145,7 @@ jobs:
 
 
 
-    # Qt部署
+    # 部署Qt
 
     - name: Deploy Qt
 
@@ -171,7 +169,7 @@ jobs:
 
 
 
-    # 补OpenSSL DLL
+    # 复制OpenSSL DLL
 
     - name: Copy OpenSSL DLL
 
@@ -192,12 +190,11 @@ jobs:
 
     # 最终检查
 
-    - name: Final Check
+    - name: Check output
 
       shell: cmd
 
       run: |
-
 
         dir /s windows\build\*.exe
 
@@ -207,14 +204,14 @@ jobs:
 
     # 上传
 
-    - name: Upload Artifact
+    - name: Upload artifact
 
       uses: actions/upload-artifact@v4
 
       with:
 
-        name: LibrePods-Windows-Release
+        name: LibrePods-Windows
 
-        path:
+        path: |
 
           windows/build/**
